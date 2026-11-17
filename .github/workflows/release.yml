@@ -1,0 +1,46 @@
+name: release
+
+# Push a tag like v0.2.0 to build bbmix for Linux and attach the download to a
+# GitHub release. Linux only: bbmix talks to the Babyface through ALSA.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux packages
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libxkbcommon-dev
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+      - name: Package
+        run: |
+          name=bbmix-${{ github.ref_name }}-x86_64-unknown-linux-gnu
+          mkdir "$name"
+          cp README.md LICENSE misc/bbmix.desktop target/release/bbmix "$name"/
+          tar czf "$name.tar.gz" "$name"
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: bbmix-*.tar.gz
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          body: |
+            A modern mixer for the RME Babyface Pro / Pro FS on Linux.
+
+            **What's in it**
+            - TotalMix-style workflow: hardware inputs, software playback and hardware outputs; click an output to mix to it
+            - Preamp gain for AN1/AN2 (mic) and IN3/IN4 (instrument), 48V, PAD and input sensitivity
+            - Channels are mono by default (both ears); turn on **pan** when you want it, or **ST** to link a stereo pair
+            - Output volumes, clock source and S/PDIF options
+            - Your mix is saved and put back on the interface every time it connects
+
+            **Download**
+            - **Linux:** `x86_64-unknown-linux-gnu.tar.gz`, unpack and run `bbmix` (needs ALSA and a kernel with the Babyface Pro mixer, Linux 6.4+ for gain). Copy `bbmix.desktop` to `~/.local/share/applications/` for a menu entry.
+
+            `bbmix --demo` lets you try it without the interface; `bbmix --help` shows where your mix is saved.
