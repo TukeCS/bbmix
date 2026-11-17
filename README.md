@@ -6,7 +6,7 @@ A modern mixer for the **RME Babyface Pro / Pro FS** on Linux, in the same look 
 RME never made Linux drivers or a Linux TotalMix, but the kernel's `snd-usb-audio`
 driver exposes the Babyface's hardware mixer as ALSA controls. bbmix is a front end for those.
 
-![bbmix](screenshots/bbmix.png)
+![bbmix running with a Babyface Pro FS](screenshots/bbmix.png)
 
 ## Features
 
