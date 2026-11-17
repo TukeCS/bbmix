@@ -35,7 +35,8 @@ driver exposes the Babyface's hardware mixer as ALSA controls. bbmix is a front 
 | drag | move a fader / knob / pan |
 | shift + drag | fine adjust |
 | scroll wheel | 0.5 dB per notch on faders, 1 step on gain knobs |
-| double-click | reset (fader → 0 dB, pan → centre, gain → 0) |
+| double-click a fader | −∞ (off); double-click again for 0 dB |
+| double-click pan / gain | centre / 0 dB |
 | double-click a name | rename the channel |
 | click an output | mix to that output (also `1` – `6`) |
 

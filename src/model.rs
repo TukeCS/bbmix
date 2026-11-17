@@ -94,7 +94,13 @@ impl Send {
 
 /// Fader taper: position 0..1 ↔ linear volume. A 4th-power curve puts 0 dB at ~84 % of
 /// travel, −18 dB at half way and gives the quiet end room, like a real console fader.
+/// The bottom of the fader's travel (below about −80 dB) is −∞, so it's easy to hit.
+pub const FADER_OFF: f32 = 0.08;
+
 pub fn fader_to_vol(pos: f32) -> u32 {
+    if pos < FADER_OFF {
+        return 0;
+    }
     (VOL_MAX as f32 * pos.clamp(0.0, 1.0).powi(4)).round() as u32
 }
 pub fn vol_to_fader(vol: u32) -> f32 {
@@ -406,6 +412,8 @@ mod tests {
     #[test]
     fn fader_taper() {
         assert_eq!(fader_to_vol(0.0), 0);
+        assert_eq!(fader_to_vol(0.05), 0); // bottom of the travel snaps to -inf
+        assert!(vol_db(fader_to_vol(FADER_OFF)) < -80.0);
         assert_eq!(fader_to_vol(1.0), VOL_MAX);
         assert!((vol_db(fader_to_vol(vol_to_fader(VOL_UNITY)))).abs() < 0.01);
         assert!((vol_db(VOL_MAX) - 6.02).abs() < 0.01);

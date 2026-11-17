@@ -291,7 +291,7 @@ impl App {
             Bus::Playback => "SOFTWARE PLAYBACK",
         };
         let sub = format!("→ {}", pair_name(self.st.output));
-        let hint = "drag · scroll · double-click resets · shift = fine";
+        let hint = "drag · scroll · double-click = −∞ / 0 dB · shift = fine";
         Self::card_frame(ui, height, title, &sub, hint, |ui| {
                 let h = ui.available_height();
                 let w = ui.available_width();
@@ -820,7 +820,7 @@ fn fader_widget(ui: &mut Ui, r: Rect, id: Id, s: &mut Send) {
     let y_of = |pos: f32| track.bottom() - pos * len;
 
     let resp = ui.interact(r, id, Sense::click_and_drag()).on_hover_text(format!(
-        "{} dB: drag, scroll (0.5 dB), double-click for 0 dB",
+        "{} dB: drag, scroll (0.5 dB), double-click for −∞ (again for 0 dB)",
         fmt_db(vol_db(s.vol))
     ));
     // keep the exact fader position while dragging, so slow drags don't stall on rounding
@@ -846,8 +846,9 @@ fn fader_widget(ui: &mut Ui, r: Rect, id: Id, s: &mut Send) {
         let db = if db.is_finite() { db + steps * 0.5 } else if steps > 0.0 { -60.0 } else { db };
         s.vol = if db < -60.0 { 0 } else { db_to_vol(db.min(6.02)) };
     }
+    // double-click: off (−∞); again: back to 0 dB
     if resp.double_clicked() {
-        s.vol = VOL_UNITY;
+        s.vol = if s.vol == 0 { VOL_UNITY } else { 0 };
     }
 
     let p = ui.painter();
