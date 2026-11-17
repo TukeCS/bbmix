@@ -207,6 +207,7 @@ impl Device {
                     let pair = o / 2;
                     let other = Target::Send(bus, ch, o ^ 1);
                     let w = self.read(other)?.unwrap_or(0);
+                    let (v, w) = (off_is_zero(v), off_is_zero(w));
                     let (l, r) = if o % 2 == 0 { (v, w) } else { (w, v) };
                     if st.effective_lr(bus, ch, pair) != (l, r) {
                         if st.linked(bus, ch) {
@@ -227,10 +228,11 @@ impl Device {
                 Target::Out(o) => {
                     // a pair has one fader: follow the louder side
                     let w = self.read(Target::Out(o ^ 1))?.unwrap_or(v);
-                    let vol = self.out_norm(v.max(w));
+                    let v = off_is_zero(v.max(w));
+                    let vol = self.out_norm(v);
                     let cur = st.out(o / 2);
                     let shown = if cur.mute { self.out_range().0 } else { self.out_raw(cur.vol) };
-                    if shown != v.max(w) {
+                    if shown != v {
                         *st.out_mut(o / 2) = OutLevel { vol, mute: false };
                         changed = true;
                     }
@@ -247,6 +249,11 @@ impl Device {
         }
         Ok(changed)
     }
+}
+
+/// The driver stores a written 0 (off) as 1, so a 1 read back means off.
+fn off_is_zero(raw: i64) -> i64 {
+    if raw <= 1 { 0 } else { raw }
 }
 
 fn flag(dst: &mut bool, v: i64, changed: &mut bool) {

@@ -246,10 +246,19 @@ impl State {
         self.link_pb.resize(PAIRS, true);
         self.pan_in.resize(12, false);
         self.pan_pb.resize(12, false);
+        // the driver turns a written 0 into 1 (−90.3 dB); that level always meant off
+        for sends in self.inputs.iter_mut().chain(self.playback.iter_mut()) {
+            for s in sends.iter_mut().filter(|s| s.vol <= 1) {
+                s.vol = 0;
+            }
+        }
         // Early builds copied the driver's after-plug-in value (1 = silence) into every
         // output; nobody chooses that on purpose, so treat it as never set.
         if self.outs.len() != PAIRS || self.outs.iter().all(|o| o.vol <= 1) {
             self.outs = default_outs();
+        }
+        for o in self.outs.iter_mut().filter(|o| o.vol <= 1) {
+            o.vol = 0;
         }
         self.output = self.output.min(PAIRS - 1);
         self
@@ -340,10 +349,19 @@ impl State {
         self.outs.get(pair).copied().unwrap_or_default()
     }
     pub fn out_mut(&mut self, pair: usize) -> &mut OutLevel {
+        // the driver turns a written 0 into 1 (−90.3 dB); that level always meant off
+        for sends in self.inputs.iter_mut().chain(self.playback.iter_mut()) {
+            for s in sends.iter_mut().filter(|s| s.vol <= 1) {
+                s.vol = 0;
+            }
+        }
         // Early builds copied the driver's after-plug-in value (1 = silence) into every
         // output; nobody chooses that on purpose, so treat it as never set.
         if self.outs.len() != PAIRS || self.outs.iter().all(|o| o.vol <= 1) {
             self.outs = default_outs();
+        }
+        for o in self.outs.iter_mut().filter(|o| o.vol <= 1) {
+            o.vol = 0;
         }
         &mut self.outs[pair]
     }
@@ -437,6 +455,20 @@ mod tests {
         assert_eq!(old.fixup().outs, default_outs());
         let silent: State = serde_json::from_str(r#"{"outs": [{"vol":1},{"vol":1},{"vol":1},{"vol":1},{"vol":1},{"vol":1}]}"#).unwrap();
         assert_eq!(silent.fixup().outs, default_outs());
+    }
+
+    #[test]
+    fn drivers_one_means_off() {
+        let mut s = State::default();
+        s.playback[0][0].vol = 1;
+        s.inputs[5][2].vol = 1;
+        s.outs[3].vol = 1;
+        let s: State = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        let s = s.fixup();
+        assert_eq!(s.playback[0][0].vol, 0);
+        assert_eq!(s.inputs[5][2].vol, 0);
+        assert_eq!(s.outs[3].vol, 0);
+        assert_eq!(s.outs[0], default_outs()[0]);
     }
 
     #[test]
