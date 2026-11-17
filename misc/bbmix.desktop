@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=bbmix
+GenericName=Babyface Pro Mixer
+Comment=Mixer for the RME Babyface Pro (FS)
+Exec=bbmix
+Icon=audio-card
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;
+StartupWMClass=bbmix
