@@ -139,6 +139,22 @@ impl Default for OutLevel {
     }
 }
 
+/// Starting output levels: the driver can't tell us the real ones (it reports
+/// silence after every plug-in), so begin at something sensible rather than full blast:
+/// main outs −10 dB, phones −20 dB, digital outs 0 dB.
+pub fn default_outs() -> Vec<OutLevel> {
+    (0..PAIRS)
+        .map(|p| {
+            let db = match p {
+                0 => -10.0,
+                1 => -20.0,
+                _ => 0.0,
+            };
+            OutLevel { vol: db_to_vol(db), mute: false }
+        })
+        .collect()
+}
+
 /// Mic / instrument preamp: AN1, AN2 (mic) and IN3, IN4 (instrument / line).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub struct Preamp {
@@ -177,8 +193,7 @@ pub struct State {
     /// panning turned on per channel; off = centred, heard in both ears
     pub pan_in: Vec<bool>,
     pub pan_pb: Vec<bool>,
-    /// hardware output volumes per pair. Empty until read from the card once, so a
-    /// guess is never blasted onto your speakers.
+    /// hardware output volumes per pair
     pub outs: Vec<OutLevel>,
 }
 
@@ -203,7 +218,7 @@ impl Default for State {
             link_pb: vec![true; PAIRS],
             pan_in: vec![false; 12],
             pan_pb: vec![false; 12],
-            outs: Vec::new(),
+            outs: default_outs(),
         }
     }
 }
@@ -225,8 +240,10 @@ impl State {
         self.link_pb.resize(PAIRS, true);
         self.pan_in.resize(12, false);
         self.pan_pb.resize(12, false);
-        if !self.outs.is_empty() {
-            self.outs.resize(PAIRS, OutLevel::default());
+        // Early builds copied the driver's after-plug-in value (1 = silence) into every
+        // output; nobody chooses that on purpose, so treat it as never set.
+        if self.outs.len() != PAIRS || self.outs.iter().all(|o| o.vol <= 1) {
+            self.outs = default_outs();
         }
         self.output = self.output.min(PAIRS - 1);
         self
@@ -313,13 +330,14 @@ impl State {
         }
     }
 
-    /// Output volume for display: what's known, or 0 dB before the card was read.
     pub fn out(&self, pair: usize) -> OutLevel {
         self.outs.get(pair).copied().unwrap_or_default()
     }
     pub fn out_mut(&mut self, pair: usize) -> &mut OutLevel {
-        if self.outs.len() < PAIRS {
-            self.outs.resize(PAIRS, OutLevel::default());
+        // Early builds copied the driver's after-plug-in value (1 = silence) into every
+        // output; nobody chooses that on purpose, so treat it as never set.
+        if self.outs.len() != PAIRS || self.outs.iter().all(|o| o.vol <= 1) {
+            self.outs = default_outs();
         }
         &mut self.outs[pair]
     }
@@ -399,6 +417,18 @@ mod tests {
         assert_eq!(pair_name(0), "AN 1/2");
         assert_eq!(pair_name(1), "PH 3/4");
         assert_eq!(pair_name(5), "ADAT 7/8");
+    }
+
+    #[test]
+    fn outputs_start_at_safe_levels() {
+        let s = State::default();
+        assert!((vol_db(s.out(0).vol) + 10.0).abs() < 0.01);
+        assert!((vol_db(s.out(1).vol) + 20.0).abs() < 0.01);
+        // a file saved before outputs existed gets the same defaults
+        let old: State = serde_json::from_str(r#"{"outs": []}"#).unwrap();
+        assert_eq!(old.fixup().outs, default_outs());
+        let silent: State = serde_json::from_str(r#"{"outs": [{"vol":1},{"vol":1},{"vol":1},{"vol":1},{"vol":1},{"vol":1}]}"#).unwrap();
+        assert_eq!(silent.fixup().outs, default_outs());
     }
 
     #[test]

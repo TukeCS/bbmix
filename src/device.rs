@@ -125,9 +125,6 @@ impl Device {
         Ok(())
     }
 
-    pub fn has_outputs(&self) -> bool {
-        self.ctl(Target::Out(0)).is_some()
-    }
     fn out_range(&self) -> (i64, i64) {
         self.ctl(Target::Out(0)).map_or((0, VOL_MAX as i64), |c| (c.min, c.max))
     }
@@ -148,23 +145,10 @@ impl Device {
     }
 
     pub fn push_out(&self, st: &State, pair: usize) -> Result<(), Gone> {
-        if st.outs.is_empty() {
-            return Ok(()); // not read from the card yet
-        }
         let o = st.out(pair);
         let raw = if o.mute { self.out_range().0 } else { self.out_raw(o.vol) };
         self.write(Target::Out(2 * pair), raw)?;
         self.write(Target::Out(2 * pair + 1), raw)
-    }
-
-    /// Reads the output volumes if bbmix has never seen them.
-    pub fn pull_outs_if_unknown(&self, st: &mut State) -> Result<bool, Gone> {
-        if !st.outs.is_empty() || !self.has_outputs() {
-            return Ok(false);
-        }
-        let ids: Vec<u32> = (0..12).filter_map(|o| self.ctl(Target::Out(o)).map(|c| c.numid)).collect();
-        st.out_mut(0); // make the list exist, then fill it from the card
-        self.apply_changes(st, &ids)
     }
 
     pub fn push_preamp(&self, st: &State, i: usize) -> Result<(), Gone> {
@@ -204,12 +188,6 @@ impl Device {
         self.push_globals(st)
     }
 
-    /// Takes everything from the card (first run, when there's nothing saved yet).
-    pub fn pull_all(&self, st: &mut State) -> Result<(), Gone> {
-        let all: Vec<u32> = self.targets.keys().copied().collect();
-        self.apply_changes(st, &all).map(|_| ())
-    }
-
     /// Updates `st` from controls that changed on the card. Our own writes echo back as
     /// events too; those match the state already and leave it untouched (so a muted
     /// channel or a pan at zero volume isn't lost). Returns whether anything changed.
@@ -247,9 +225,6 @@ impl Device {
                     }
                 }
                 Target::Out(o) => {
-                    if st.outs.is_empty() {
-                        continue;
-                    }
                     // a pair has one fader: follow the louder side
                     let w = self.read(Target::Out(o ^ 1))?.unwrap_or(v);
                     let vol = self.out_norm(v.max(w));

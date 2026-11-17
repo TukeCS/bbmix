@@ -51,7 +51,7 @@ pub struct App {
     st: State,
     dev: Option<Device>,
     opts: Opts,
-    /// a saved state exists, so it's what gets restored on connect
+    /// a state file exists (otherwise the defaults are saved on first connect)
     have_saved: bool,
     dirty_at: Option<f64>,
     next_probe: f64,
@@ -102,21 +102,12 @@ impl App {
             }
             self.next_probe = now + 1.5;
             let Some(dev) = Device::connect() else { return };
-            // The driver forgets the mixer when the interface is power-cycled, so what
-            // we remember goes back onto the card. First run: adopt the card's settings.
-            let res = if self.have_saved {
-                dev.push_all(&self.st)
-            } else {
-                let r = dev.pull_all(&mut self.st);
-                self.have_saved = true;
-                self.dirty(now);
-                r
-            };
-            // output volumes are only ever taken from the card the first time
-            let res = res.and_then(|_| dev.pull_outs_if_unknown(&mut self.st));
-            if let Ok(changed) = res {
-                if changed {
-                    self.dirty(now);
+            // The driver can't read the interface's settings: after every plug-in it
+            // reports silence. So bbmix's state (saved, or the defaults on a first run)
+            // always goes onto the card.
+            if dev.push_all(&self.st).is_ok() {
+                if !self.have_saved {
+                    self.dirty(now); // first run: save the defaults we just applied
                 }
                 self.dev = Some(dev);
             }
